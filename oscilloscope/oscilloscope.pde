@@ -33,6 +33,17 @@
 import processing.serial.*;
 import controlP5.*;
 
+// Sin wave
+
+int xspacing = 16;   // How far apart should each horizontal location be spaced
+int w;              // Width of entire wave
+
+float theta = 0.0;  // Start angle at 0
+float amplitude = 510;  // Height of wave
+float period = 500.0;  // How many pixels before the wave repeats
+float dx;  // Value for incrementing X, a function of period and xspacing
+float[] yvalues;  // Using an array to store height values for the wave
+float yvalue;
 
 // * ------------------ HOT KEYS ------------------
 final char T_UP       = 'w'; // Translate waveform up
@@ -78,12 +89,21 @@ String rcvBuf;             // Buffer to hold messages sent from mcu
 int[] timeBars = {0,0};    // The horizontal line boundaries
 long[] times;
 int[] values;
+float[] vals;
 int   timeMode = 0;
 PFont f;
 boolean pause;
+float val;                        // Data received from the serial port
+long valTime;                   // Time data was received
+float voltage;
 
 void setup()
 {
+  // sin wave
+  w = boxMain+16;
+  dx = (TWO_PI / period) * xspacing;
+  yvalues = new float[w/xspacing];
+  
   size(1000, 480);
   f = createFont("Arial", 16, true);
 
@@ -111,10 +131,11 @@ void setup()
      .setSize(55,19)
      ;
   
-  times = new long[width];
-  values = new int[width];
-  timeBars[0] = width/3;
-  timeBars[1] = 2*width/3;
+  times = new long[boxMain];
+  values = new int[boxMain];
+  vals = new float[boxMain];
+  timeBars[0] = boxMain/3;
+  timeBars[1] = 2*boxMain/3;
  
 }
 
@@ -153,13 +174,20 @@ int getY(int val) {
   return (int)(height/2 -(val-512+centerV)*scale / 1023.0f * (height - 1));
 }
 
+// Get a y-value for the datapoint, varies based on axis settings
+float getYFloat(float val) {
+  return (float)(height/2 -(val-512+centerV)*scale / 1023.0f * (height - 1));
+}
+
 // Draw voltage waveforms.
 void drawLines() {
-  int x0 = 0, x1 = 0, y0 = 0, y1 = 0;
+  int x0 = 0, x1 = 0;
+  float y0 = 0, y1 = 0;
   stroke(255,255,0);
   for (int i=0; i<boxMain; i++) {
     x1 = round(boxMain - ((boxMain-i) * zoom) + centerH);
-    y1 = getY(values[i]);
+    //y1 = getY(values[i]);
+    y1 = getYFloat(vals[i]);
     if(i > 1)
       line(x0, y0, x1, y1);
     x0 = x1;
@@ -172,7 +200,8 @@ void drawGrid() {
   // Get scaled values for bounds
   int pFive = getY(1023);
   int zero  = getY(0);
-
+//println("pfive" + pFive);
+//println("zero" + zero);
   // Draw voltage bounds
   stroke(255, 0, 0);
   line(0, pFive-1, boxMain, pFive-1);
@@ -205,11 +234,11 @@ void drawGrid() {
     textFont(f, 16);
     fill(204, 102, 0);
     
-    int idx0 = round(width + (timeBars[0] - width - centerH)/zoom);
-    int idx1 = round(width + (timeBars[1] - width - centerH)/zoom);
+    int idx0 = round(boxMain + (timeBars[0] - boxMain - centerH)/zoom);
+    int idx1 = round(boxMain + (timeBars[1] - boxMain - centerH)/zoom);
     
     // Ensure time bars are over a recorded portion of the waveform
-    if(idx1 < 0 || idx0 < 0 || idx1 > (width-1) || idx0 > (width-1) || times[idx1] == 0 || times[idx0] == 0)
+    if(idx1 < 0 || idx0 < 0 || idx1 > (boxMain-1) || idx0 > (boxMain-1) || times[idx1] == 0 || times[idx0] == 0)
       text("Time: N/A", 30, height-12);
     else{
       float timeDiff = truncate((times[idx1] - times[idx0])/2000000.0,2);
@@ -237,17 +266,17 @@ void drawVertLines(){
 }
 
 // Push the values in the data array
-void pushValue(int value) {
-  for (int i=0; i<width-1; i++)
-    values[i] = values[i+1];
-  values[width-1] = value;
+void pushValue(float value) {
+  for (int i=0; i<boxMain-1; i++)
+    vals[i] = vals[i+1];
+  vals[boxMain-1] = value;
 }
 
 // Push the timestamps in the time array
 void pushTime(long time) {
-  for (int i=0; i<width-1; i++)
+  for (int i=0; i<boxMain-1; i++)
     times[i] = times[i+1];
-  times[width-1] = time;
+  times[boxMain-1] = time;
 }
 
 // Truncate a floating point number
@@ -279,9 +308,9 @@ void keyPressed() {
       timeBars[1] -= 1; 
     break;
   case BAR_RIGHT:                                            // Move the time bar right (also mouse click)
-    if (timeMode == 1 && timeBars[0] < width-1)
+    if (timeMode == 1 && timeBars[0] < boxMain-1)
       timeBars[0] += 1;
-    else if (timeMode == 2 && timeBars[1] < width-1)
+    else if (timeMode == 2 && timeBars[1] < boxMain-1)
       timeBars[1] += 1; 
     break;
   }
@@ -293,7 +322,7 @@ void keyReleased() {
   switch (key) {
   case Z_IN:                                                 // Zoom horizontal
     zoom *= 2.0f;
-    if ( (int) (width / zoom) <= 1 )
+    if ( (int) (boxMain / zoom) <= 1 )
       zoom /= 2.0f;
     break;
   case Z_OUT:                                                // Zoom horizontal
@@ -311,8 +340,8 @@ void keyReleased() {
   case TOG_PAUSE:                                            // Toggle waveform pausing
     if (pause) {
       centerH = 0;
-      for (int i=0; i<width; i++){
-        values[i] = 0;                                       // Clear data on resume
+      for (int i=0; i<boxMain; i++){
+        vals[i] = 0;                                       // Clear data on resume
         times[i] = 0;
       }
     }
@@ -333,28 +362,48 @@ void draw()
   // Blackground.
   background(0);
 
+  // PROGRAM LOGIC
+  calcWave();
+  //println(yvalue);
+
   // Draw main gui lines (horizontal voltage lines, vertical line seperator, etc).
   drawGrid();
-
   stroke(126);
 
-  // PROGRAM LOGIC
-
-/*
-  // Check if there are bytes available (from the mcu).
-  if (port.available() > 0)
-  { 
-    // Data is available.
-    rcvBuf = port.readStringUntil('\n');
-    println(rcvBuf);
-    // Process the data here.
-    // ..
-    // adc reading num
-
+  // Get current voltage, time of reading
+  val = getValue();
+  // madhax
+  //val = yvalue;
+  print(val+"\n");
+  valTime = System.nanoTime();
+  
+  // If not paused
+  if (!pause && val != -1) {
+    // Push value/time onto array
+    pushValue(val);
+    pushTime(valTime);
+    
+    // Print current voltage reading
+    textFont(f, 16);
+    fill(204, 102, 0);
+    voltage = truncate(5.0*val / 1023, 1);
+    text("Voltage: " + voltage + "V", 1170, 30);
   }
-*/
+  
 
   // Draw the voltage waveforms.
   drawLines();
   //drawVertLines();
+}
+
+void calcWave() {
+  // Increment theta (try different values for 'angular velocity' here
+  theta += 0.02;
+
+  // For every x value, calculate a y value with sine function
+  float x = theta;
+  //for (int i = 0; i < yvalues.length; i++) {
+    yvalue = sin(x)*amplitude + 510;
+    x+=dx;
+  //}
 }

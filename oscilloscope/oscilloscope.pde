@@ -61,6 +61,7 @@ final char RESET_AXIS = ' '; // Reset axis settings
 final char MEAS_TIME  = 'x'; // Adds and/or highlights vertical bars (time measurement)
 final char BAR_LEFT   = ','; // Move highlighted vertical bar left (can also mouse click)
 final char BAR_RIGHT  = '.'; //                               right
+final char TRIGGER    = 't'; // Trigger
 // * ----------------------------------------------
 
 // * --------------- STARTING STATE ---------------
@@ -96,15 +97,18 @@ boolean pause;
 float val;                        // Data received from the serial port
 long valTime;                   // Time data was received
 float voltage;
+int in1, in2, out1, out2;
+long start, end;
 
 void setup()
 {
+    frameRate(1000);
   // sin wave
   w = boxMain+16;
   dx = (TWO_PI / period) * xspacing;
   yvalues = new float[w/xspacing];
   
-  size(1000, 480);
+  size(1000, 480, P2D);
   f = createFont("Arial", 16, true);
 
   port = new Serial(this, Serial.list()[com_port], baud_rate);
@@ -159,12 +163,20 @@ public void Signal_Off(int theValue) {
 // Misc functions
 
 // Read value from serial stream
-int getValue() {
+/*int getValue() {
   int value = -1;
   while (port.available () >= 3) {
     if (port.read() == 0xff) {
       value = (port.read() << 8) | (port.read());
     }
+  }
+  return value;
+}*/
+
+float getValue() {
+  float value = -1;
+  if (port.available() > 0) {
+    value = port.read();
   }
   return value;
 }
@@ -265,6 +277,7 @@ void drawVertLines(){
   }
 }
 
+
 // Push the values in the data array
 void pushValue(float value) {
   for (int i=0; i<boxMain-1; i++)
@@ -278,6 +291,21 @@ void pushTime(long time) {
     times[i] = times[i+1];
   times[boxMain-1] = time;
 }
+
+// Push the values in the data array
+/*
+void pushValue(float value) {
+  vals[in1] = value;
+  in1 = (in1 + 1) % boxMain;
+}
+
+// Push the timestamps in the time array
+void pushTime(long time) {
+  times[in2] = time;
+  in2 = (in2 + 1) % boxMain;
+}
+*/
+
 
 // Truncate a floating point number
 float truncate(float x, int digits) {
@@ -359,11 +387,15 @@ void mousePressed() {
 
 void draw()
 {
+
+  for(int i=0; i<60; i++) {
+     // start = millis();
+   // println("fps: "+int(frameRate));
   // Blackground.
   background(0);
 
   // PROGRAM LOGIC
-  calcWave();
+  //calcWave();
   //println(yvalue);
 
   // Draw main gui lines (horizontal voltage lines, vertical line seperator, etc).
@@ -394,6 +426,12 @@ void draw()
   // Draw the voltage waveforms.
   drawLines();
   //drawVertLines();
+  //  end = millis();
+    //  println("Elapsed time = " + (end-start));
+  }
+
+  
+
 }
 
 void calcWave() {

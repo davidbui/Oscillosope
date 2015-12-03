@@ -33,17 +33,16 @@
 import processing.serial.*;
 import controlP5.*;
 
-// Sin wave
-
-int xspacing = 16;   // How far apart should each horizontal location be spaced
-int w;              // Width of entire wave
-
-float theta = 0.0;  // Start angle at 0
-float amplitude = 1.65*200;  // Height of wave
-float period = 500.0;  // How many pixels before the wave repeats
-float dx;  // Value for incrementing X, a function of period and xspacing
-float[] yvalues;  // Using an array to store height values for the wave
-float yvalue;
+// * ------------------ Generating a sin wave ------------------
+int xspacing = 16;           // How far apart should each horizontal location be spaced
+int w;                       // Width of entire wave
+float theta = 0.0;           // Start angle at 0
+float amplitude = 15;  // Height of wave
+float period = 500.0;        // How many pixels before the wave repeats
+float dx;                    // Value for incrementing X, a function of period and xspacing
+float[] yvalues;             // Using an array to store height values for the wave
+float yvalue;                // Store the value of the sin wave
+// * ----------------------------------------------
 
 // * ------------------ HOT KEYS ------------------
 final char T_UP       = 'w'; // Translate waveform up
@@ -62,12 +61,11 @@ final char MEAS_TIME  = 'x'; // Adds and/or highlights vertical bars (time measu
 final char BAR_LEFT   = ','; // Move highlighted vertical bar left (can also mouse click)
 final char BAR_RIGHT  = '.'; //                               right
 final char TRIGGER    = 't'; // Trigger
-
 // * ----------------------------------------------
 
 // * --------------- STARTING STATE ---------------
 float zoom    = 1.0;
-float scale   = 0.5;
+float scale   = 1.0;
 int centerV   = 0;
 int centerH   = 0;
 int gridLines = 0;
@@ -79,39 +77,47 @@ int baud_rate = 115200;
 Textlabel myTextlabelA;
 
 // GUI Box.
-int boxWidth = 1500;
-int boxLength = 800;
+int boxWidth = 1200;
+int boxLength = 700;
 int boxMain  = boxWidth-200;
-
 
 // Global Variables.
 ControlP5 cp5;             // GUI lib.
-Serial port;               // Create object from Serial class
-String rcvBuf;             // Buffer to hold messages sent from mcu
-int[] timeBars = {0,0};    // The horizontal line boundaries
-long[] times;
-int[] values;
-float[] vals;
+Serial port;               // Create object from Serial class.
+
+String rcvBuf;             // Buffer to hold messages sent from microcontroller.
+int[] timeBars = {0,0};    // The horizontal line boundaries.
+long[] times;              // Holds the the current times.
+//int[] values;            // For the int original.
+float[] fvalues;           // Holds the voltage readings. 
 int   timeMode = 0;
 PFont f;
-boolean pause;
+boolean pause;             // To pause the screen.
 float val;                        // Data received from the serial port
 long valTime;                   // Time data was received
 float voltage;
-int in1, in2, out1, out2;
 long start, end;
-int isDC; // ac or dc settings
+boolean isTriggered;
+float triggerLevel;
+
+// Get scaled values for bounds
+int high;
+int low;
+int ohigh;
+int olow;
+float vhigh = 15;
+float vlow = -15;
 
 void setup()
 {
-  isDC = 1; 
-    frameRate(1000);
+  frameRate(1000);
+  
   // sin wave
   w = boxMain+16;
   dx = (TWO_PI / period) * xspacing;
   yvalues = new float[w/xspacing];
   
-  size(1500, 800, P2D);
+  size(1200, 700, P2D);
   f = createFont("Arial", 16, true); 
 
   //port = new Serial(this, Serial.list()[com_port], baud_rate);
@@ -137,13 +143,17 @@ void setup()
      .setPosition(boxWidth-180,60)
      .setSize(55,19)
      ;
-  
+
   times = new long[boxMain];
-  values = new int[boxMain];
-  vals = new float[boxMain];
+  // values = new int[boxMain];
+  fvalues = new float[boxMain];
   timeBars[0] = boxMain/3;
   timeBars[1] = 2*boxMain/3;
- 
+  isTriggered = false;
+  triggerLevel = height/4;
+    // Get scaled values for bounds
+  ohigh = high = getY(1023);
+  olow = low  = getY(0);
 }
 
 
@@ -178,13 +188,12 @@ public void Signal_Off(int theValue) {
 
 float getValue() {
   float value = -1;
-  String v;
   if (port.available() > 0) { 
     //  until we get a linefeed
-      v = port.readStringUntil('\n'); 
+      rcvBuf = port.readStringUntil('\n'); 
     // Convert the byte array to a String
-    if (v != null)
-      value = float(v)*200+525;
+    if (rcvBuf != null)
+      value = float(rcvBuf)*200+525;
   }
 
   return value;
@@ -192,12 +201,24 @@ float getValue() {
 
 // Get a y-value for the datapoint, varies based on axis settings
 int getY(int val) {
-  return (int)(height/2 -(val-512)*0.5 / 1023.0f * (height - 1));
+  return (int)(height/2 -(val-512)*0.8 / 1023.0f * (height - 1));
 }
 
 // Get a y-value for the datapoint, varies based on axis settings
-float getYFloat(float val) {
+/*float getYFloat(float val) {
   return (float)(height/2 -(val+centerV)*scale / 1023.0f * (height - 1));
+}*/
+
+float getYFloat(float val) {
+  return (float)(height/2 - ((low-high)/(2*vhigh))*val*scale);
+}
+
+float getVoltage(float val) {
+  float half = (low-high)/2;
+  
+  return (((height/2)- val)*(vhigh/half));
+  
+ // return (float)(height/2 - ((low-high)/(2*15))*val*scale);
 }
 
 // Draw voltage waveforms.
@@ -208,9 +229,9 @@ void drawLines() {
   for (int i=0; i<boxMain; i++) {
     x1 = round(boxMain - ((boxMain-i) * zoom) + centerH);
     //y1 = getY(values[i]);
-    y1 = (getYFloat(vals[i]));
+    y1 = (getYFloat(fvalues[i]));
 
-    //if(i > 1)
+    if(i > 1 && y1 <= olow && y1 >= ohigh && y0 <= olow && y0 >= ohigh)
       line(x0, y0, x1, y1);
     x0 = x1;
     y0 = y1;
@@ -219,24 +240,17 @@ void drawLines() {
 
 // Draw gridlines (bounds, minor)
 void drawGrid() {
-  // Get scaled values for bounds
-  int pFive = getY(1023);
-  int zero  = getY(0);
-//println("pfive" + pFive);
-//println("zero" + zero);
-
-
   // Draw voltage bounds
   stroke(255, 0, 0);
-  line(0, pFive-1, boxMain, pFive-1);
-  line(0, zero+1, boxMain, zero+1);
+  line(0, high, boxMain, high);
+  line(0, low, boxMain, low);
 
   // Add voltage bound text
   textFont(f, 20);
   fill(255, 0, 0);
   
-  text("+15V", 5, pFive-4);
-  text("-15V", 5, zero-4);
+  text(truncate(vhigh,1)+"V", 5, high-2);
+  text(truncate(vlow,1)+"V", 5, low+18);
 
   // Draw minor grid lines
   int gridVal = 0;
@@ -253,7 +267,7 @@ void drawGrid() {
     float scaleVal = truncate(5.0f / (gridLines+1), 3);
     text("Grid: " + scaleVal + "V", 1170, height-12);
   }
-  
+
   // Print difference between vertical 'time' bars
   if (timeMode > 0) {
     textFont(f, 16);
@@ -270,7 +284,7 @@ void drawGrid() {
       text("Time: " + timeDiff + "ms", 30, height-12);
     }
   }
-  
+
   // Line divisor b/w signal and buttons.
   line(boxMain, 0, boxMain, boxLength);
 }
@@ -294,8 +308,8 @@ void drawVertLines(){
 // Push the values in the data array
 void pushValue(float value) {
   for (int i=0; i<boxMain-1; i++)
-    vals[i] = vals[i+1];
-  vals[boxMain-1] = value;
+    fvalues[i] = fvalues[i+1];
+  fvalues[boxMain-1] = value;
 }
 
 // Push the timestamps in the time array
@@ -304,21 +318,6 @@ void pushTime(long time) {
     times[i] = times[i+1];
   times[boxMain-1] = time;
 }
-
-// Push the values in the data array
-/*
-void pushValue(float value) {
-  vals[in1] = value;
-  in1 = (in1 + 1) % boxMain;
-}
-
-// Push the timestamps in the time array
-void pushTime(long time) {
-  times[in2] = time;
-  in2 = (in2 + 1) % boxMain;
-}
-*/
-
 
 // Truncate a floating point number
 float truncate(float x, int digits) {
@@ -355,7 +354,11 @@ void keyPressed() {
       timeBars[1] += 1; 
     break;
   case TRIGGER:
-    trigger();
+    if (isTriggered) {
+      println("Turn off trigger");
+      isTriggered = false;
+    } else
+      trigger();
     break;
   }
 
@@ -376,18 +379,26 @@ void keyReleased() {
     if (zoom < 1.0f)
       zoom *= 2.0f;
     break;
-  case S_IN: scale*=2; break;                                // Scale vertical
-  case S_OUT: scale /= 2; break;                             // Scale vertical
+  case S_IN:
+    scale*=2; 
+    vhigh/=2;
+    vlow/=2;
+    break;                                // Scale vertical
+  case S_OUT:
+    scale /= 2; 
+    vhigh*=2;
+    vlow*=2;
+  break;                             // Scale vertical
   case RESET_AXIS:                                           // Reset all scaling
     centerV = 0; centerH = 0;
-    scale = 0.5; zoom  = 1; gridLines = 0;
+    scale = 1.0; zoom  = 1; gridLines = 0;
     break;
   case MEAS_TIME: timeMode = (timeMode + 1) % 3; break;      // Change the vertical bars (off, left bar, right bar)
   case TOG_PAUSE:                                            // Toggle waveform pausing
     if (pause) {
       centerH = 0;
       for (int i=0; i<boxMain; i++){
-        vals[i] = 0;                                       // Clear data on resume
+        fvalues[i] = 0;                                       // Clear data on resume
         times[i] = 0;
       }
     }
@@ -405,33 +416,31 @@ void mousePressed() {
 
 void draw()
 {
-
-  
   for(int i=0; i<60; i++) {
-     // start = millis();
-   // println("fps: "+int(frameRate));
-  // Blackground.
-  background(0);
+  // start = millis();
+  // println("fps: "+int(frameRate));
+  background(0);  // Blackground.
 
   // PROGRAM LOGIC
-  calcWave();
-  //println(yvalue);
 
   // Draw main gui lines (horizontal voltage lines, vertical line seperator, etc).
+  
   drawGrid();
   stroke(126);
 
   // Get current voltage, time of reading
- // val = getValue();
-  // madhax
+  // val = getValue();
+  calcWave();
+  //println(yvalue);
   val = yvalue;
-
-  valTime = System.nanoTime();
   
-  // If not paused
+
+  valTime = System.nanoTime();    // Get current time in nanoseconds.
+  
+  // If not paused and there is data in serial.
   if (!pause && val != -1) {
     // Push value/time onto array
-    print(val+"\n");
+   // print(val+"\n");
     pushValue(val);
     pushTime(valTime);
     
@@ -441,16 +450,12 @@ void draw()
     voltage = truncate(5.0*val / 1023, 1);
     text("Voltage: " + voltage + "V", 1170, 30);
   }
-  
 
-  // Draw the voltage waveforms.
-  drawLines();
-  drawVertLines();
+  drawLines();     // Draw the voltage waveforms.
+  drawVertLines(); // Vertical line measurements.
   //  end = millis();
-    //  println("Elapsed time = " + (end-start));
+  //  println("Elapsed time = " + (end-start));
   }
-
-  
 
 }
 
@@ -468,6 +473,75 @@ void calcWave() {
 
 void trigger()
 {
+  println("Turn on trigger");
+  isTriggered = true;
+  float[] copy = new float[boxMain];
+  arrayCopy(fvalues, copy, boxMain);
 
+  float sum = 0;  // holds the sum starting at the triggerLevel point and the next up to 10.
+  int numberSum = 0; // the number of elements summed.
+  float avg = 0; // holds the avg
+  int triggersFound = 0;
+  float trigLevel = getVoltage(triggerLevel);
+  int[] trigLevelPosition = new int[2]; // hold the 2 trig level positions when found.
+  //println("getVoltage(high) = " + getVoltage(high));
+  //println("getVoltage(low) = " + getVoltage(low));
+  println("Trigger level in pixels = " + triggerLevel);
+  println("Trigger level in volts = " + trigLevel);
+  
+  int lookahead = 10;
+
+  for (int i=0; i<boxMain; i++)
+  {
+    // Look for 2 trigger points.
+    if (triggersFound < 2)
+    {
+      // Found a value that is close to the trigger point.
+      if (copy[i] <= (trigLevel+0.1) && copy[i] >= (trigLevel-0.1)) 
+      {
+        sum = 0;
+        numberSum = 0;
+        avg = 0;
+
+        // Look up to the next 10 spaces and get the sum.
+        for (numberSum=0; numberSum<10; numberSum++)
+        {
+          // At the edge case. Stop looking further.
+          if (i+numberSum >= boxMain-1) {
+            break;
+          }
+          sum+=copy[i+numberSum];
+        }
+        
+        avg = sum/numberSum;
+        
+        // Determine if the trigger level is a rising edge.
+        if (avg > trigLevel)
+        {
+          // Save the point.
+          trigLevelPosition[triggersFound++] = i;
+        }
+      } // End of found a trigger point.
+    } // End of triggersFound < 2
+    else {
+      // Found 2 trigger points.
+      break;
+    }
+    
+  } // End of for loop through array
+  
+
+  if (triggersFound == 2)
+  {
+    stroke(255,255,0);
+    line(trigLevelPosition[0], 0, trigLevelPosition[0], height);
+    line(trigLevelPosition[1], 0, trigLevelPosition[1], height);
+    pause = !pause;
+  }
+  else
+  {
+     println("Did not find at least 2 trigger points."); 
+  }
+  
 }
  

@@ -39,7 +39,7 @@ int xspacing = 16;   // How far apart should each horizontal location be spaced
 int w;              // Width of entire wave
 
 float theta = 0.0;  // Start angle at 0
-float amplitude = 510;  // Height of wave
+float amplitude = 1.65*200;  // Height of wave
 float period = 500.0;  // How many pixels before the wave repeats
 float dx;  // Value for incrementing X, a function of period and xspacing
 float[] yvalues;  // Using an array to store height values for the wave
@@ -62,6 +62,7 @@ final char MEAS_TIME  = 'x'; // Adds and/or highlights vertical bars (time measu
 final char BAR_LEFT   = ','; // Move highlighted vertical bar left (can also mouse click)
 final char BAR_RIGHT  = '.'; //                               right
 final char TRIGGER    = 't'; // Trigger
+
 // * ----------------------------------------------
 
 // * --------------- STARTING STATE ---------------
@@ -78,8 +79,8 @@ int baud_rate = 115200;
 Textlabel myTextlabelA;
 
 // GUI Box.
-int boxWidth = 1000;
-int boxLength = 480;
+int boxWidth = 1500;
+int boxLength = 800;
 int boxMain  = boxWidth-200;
 
 
@@ -99,19 +100,21 @@ long valTime;                   // Time data was received
 float voltage;
 int in1, in2, out1, out2;
 long start, end;
+int isDC; // ac or dc settings
 
 void setup()
 {
+  isDC = 1; 
     frameRate(1000);
   // sin wave
   w = boxMain+16;
   dx = (TWO_PI / period) * xspacing;
   yvalues = new float[w/xspacing];
   
-  size(1000, 480, P2D);
-  f = createFont("Arial", 16, true);
+  size(1500, 800, P2D);
+  f = createFont("Arial", 16, true); 
 
-  port = new Serial(this, Serial.list()[com_port], baud_rate);
+  //port = new Serial(this, Serial.list()[com_port], baud_rate);
   cp5 = new ControlP5(this);
 
   // Setup text labels.
@@ -175,20 +178,26 @@ public void Signal_Off(int theValue) {
 
 float getValue() {
   float value = -1;
-  if (port.available() > 0) {
-    value = port.read();
+  String v;
+  if (port.available() > 0) { 
+    //  until we get a linefeed
+      v = port.readStringUntil('\n'); 
+    // Convert the byte array to a String
+    if (v != null)
+      value = float(v)*200+525;
   }
+
   return value;
 }
 
 // Get a y-value for the datapoint, varies based on axis settings
 int getY(int val) {
-  return (int)(height/2 -(val-512+centerV)*scale / 1023.0f * (height - 1));
+  return (int)(height/2 -(val-512)*0.5 / 1023.0f * (height - 1));
 }
 
 // Get a y-value for the datapoint, varies based on axis settings
 float getYFloat(float val) {
-  return (float)(height/2 -(val-512+centerV)*scale / 1023.0f * (height - 1));
+  return (float)(height/2 -(val+centerV)*scale / 1023.0f * (height - 1));
 }
 
 // Draw voltage waveforms.
@@ -199,8 +208,9 @@ void drawLines() {
   for (int i=0; i<boxMain; i++) {
     x1 = round(boxMain - ((boxMain-i) * zoom) + centerH);
     //y1 = getY(values[i]);
-    y1 = getYFloat(vals[i]);
-    if(i > 1)
+    y1 = (getYFloat(vals[i]));
+
+    //if(i > 1)
       line(x0, y0, x1, y1);
     x0 = x1;
     y0 = y1;
@@ -214,16 +224,19 @@ void drawGrid() {
   int zero  = getY(0);
 //println("pfive" + pFive);
 //println("zero" + zero);
+
+
   // Draw voltage bounds
   stroke(255, 0, 0);
   line(0, pFive-1, boxMain, pFive-1);
   line(0, zero+1, boxMain, zero+1);
 
   // Add voltage bound text
-  textFont(f, 10);
+  textFont(f, 20);
   fill(255, 0, 0);
-  text("+5V", 5, pFive+12);
-  text(" 0V", 5, zero-4);
+  
+  text("+15V", 5, pFive-4);
+  text("-15V", 5, zero-4);
 
   // Draw minor grid lines
   int gridVal = 0;
@@ -335,13 +348,18 @@ void keyPressed() {
     else if (timeMode == 2 && timeBars[1] > 0)
       timeBars[1] -= 1; 
     break;
-  case BAR_RIGHT:                                            // Move the time bar right (also mouse click)
+  case BAR_RIGHT:                                            // Move the time bar right (also mouse click)=
     if (timeMode == 1 && timeBars[0] < boxMain-1)
       timeBars[0] += 1;
     else if (timeMode == 2 && timeBars[1] < boxMain-1)
       timeBars[1] += 1; 
     break;
+  case TRIGGER:
+    trigger();
+    break;
   }
+
+  
 }
 
 // When a key is released...
@@ -388,6 +406,7 @@ void mousePressed() {
 void draw()
 {
 
+  
   for(int i=0; i<60; i++) {
      // start = millis();
    // println("fps: "+int(frameRate));
@@ -395,7 +414,7 @@ void draw()
   background(0);
 
   // PROGRAM LOGIC
-  //calcWave();
+  calcWave();
   //println(yvalue);
 
   // Draw main gui lines (horizontal voltage lines, vertical line seperator, etc).
@@ -403,15 +422,16 @@ void draw()
   stroke(126);
 
   // Get current voltage, time of reading
-  val = getValue();
+ // val = getValue();
   // madhax
-  //val = yvalue;
-  print(val+"\n");
+  val = yvalue;
+
   valTime = System.nanoTime();
   
   // If not paused
   if (!pause && val != -1) {
     // Push value/time onto array
+    print(val+"\n");
     pushValue(val);
     pushTime(valTime);
     
@@ -425,7 +445,7 @@ void draw()
 
   // Draw the voltage waveforms.
   drawLines();
-  //drawVertLines();
+  drawVertLines();
   //  end = millis();
     //  println("Elapsed time = " + (end-start));
   }
@@ -441,7 +461,13 @@ void calcWave() {
   // For every x value, calculate a y value with sine function
   float x = theta;
   //for (int i = 0; i < yvalues.length; i++) {
-    yvalue = sin(x)*amplitude + 510;
+    yvalue = sin(x)*amplitude + 0;
     x+=dx;
   //}
 }
+
+void trigger()
+{
+
+}
+ 

@@ -107,6 +107,7 @@ float[] valuesTriggered;  // Holds the buffer to print.
 int triggeredPassed;      // Sets where the trigger will be. (Default half the screen)
 float trigLevel;          // The current trigger level.
 float triggerTime;        // The time at which the trigger is found.
+float triggerFrequency;
 // * ----------------------------------------------
 
 
@@ -292,6 +293,14 @@ void drawGrid() {
 
   // Line divisor b/w signal and buttons.
   line(boxMain, 0, boxMain, boxLength);
+  
+  // Print frequency in triggered mode.
+  if (isTriggered) {
+    textFont(f, 16);
+    fill(204, 102, 0);
+    triggerFrequency = 1/((System.nanoTime() - triggerTime)/1000000000);
+    text("Frequency: " + triggerFrequency + "Hz", boxMain/2, height*0.95);
+  }
 }
 
 // Draw vertical 'time bars' (seperate from above for better layering).

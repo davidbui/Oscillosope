@@ -69,7 +69,7 @@ float scale   = 1.0;
 int centerV   = 0;
 int centerH   = 0;
 int gridLines = 0;
-int com_port  = 1;   // Index number in Serial.list
+int com_port  = 0;   // Index number in Serial.list
 int baud_rate = 115200;
 // * ----------------------------------------------
 
@@ -160,7 +160,7 @@ void setup()
   timeBars[1] = 2*boxMain/3;
   isTriggered = false;
 
-  triggerLevel = height/4;
+  triggerLevel = height/3;
 
     // Get scaled values for bounds
   ohigh = high = getY(1023);
@@ -194,7 +194,7 @@ float getValue() {
       rcvBuf = port.readStringUntil('\n'); 
     // Convert the byte array to a String
     if (rcvBuf != null)
-      value = float(rcvBuf)*200+525;
+      value = float(rcvBuf);
   }
 
   return value;
@@ -234,7 +234,7 @@ void drawLines() {
     // Check if it is in triggered mode.
     if (isTriggered) {
       // A trigger is found and the trigger point is currently at the middle of the screen.
-      if (foundTrigger && triggeredPassed-- <= 0)
+      if (foundTrigger && triggeredPassed == 0)
       {
         arrayCopy(fvalues, valuesTriggered, boxMain);
         foundTrigger = false;
@@ -323,6 +323,8 @@ void pushValue(float value) {
   for (int i=0; i<boxMain-1; i++)
     fvalues[i] = fvalues[i+1];
   fvalues[boxMain-1] = value;
+  if (triggeredPassed > 0)
+    triggeredPassed--;
 }
 
 
@@ -439,7 +441,7 @@ void calcWave() {
 
 void draw()
 {
-  for(int i=0; i<60; i++) {
+  for(int i=0; i<600; i++) {
     background(0);  // Blackground.
 
     // Get current voltage, time of reading
@@ -480,19 +482,18 @@ void trigger()
     //println("Looking for a trigger..");
     //println("trigLevel = " + trigLevel);
     // Found the newest point is on trigger level.
-    if ((fvalues[boxMain-1] > trigLevel-0.1) && fvalues[boxMain-1] < trigLevel+0.1) {
-      //println("Found trigger point");
-      // Rising edge trigger.
-      if (fvalues[boxMain-1] > fvalues[boxMain-2]) {
-        println("Found the trigger!");
-        foundTrigger = true;
-        // Show waveform when the trigger point reaches the middle of the screen.
-        triggeredPassed = boxMain/2;
-        triggerTime = System.nanoTime();
-        
-      }
+    //if ((fvalues[boxMain-1] > trigLevel-0.5) && fvalues[boxMain-1] < trigLevel+0.5) {
+    //  //println("Found trigger point");
+    //  // Rising edge trigger.
+    if (fvalues[boxMain-1] > trigLevel && fvalues[boxMain-2] < trigLevel)
+    {
+     // println("Found the trigger!");
+      foundTrigger = true;
+      // Show waveform when the trigger point reaches the middle of the screen.
+      triggeredPassed = boxMain/2;
+      triggerTime = System.nanoTime();
+      
     }
-    
   }
 }
 

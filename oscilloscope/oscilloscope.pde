@@ -69,7 +69,7 @@ float scale   = 1.0;
 int centerV   = 0;
 int centerH   = 0;
 int gridLines = 0;
-int com_port  = 0;   // Index number in Serial.list
+int com_port  = 1;   // Index number in Serial.list
 int baud_rate = 115200;
 // * ----------------------------------------------
 
@@ -94,11 +94,15 @@ int   timeMode = 0;
 PFont f;
 boolean pause;             // To pause the screen.
 float val;                        // Data received from the serial port
-long valTime;                   // Time data was received
 float voltage;
 long start, end;
-boolean isTriggered;
+boolean isTriggered;      // Is trigger mode on or off.
+boolean foundTrigger;     // Have we found a trigger point yet?
 float triggerLevel;
+float[] valuesTriggered;  // holds the buffer to print.
+int triggeredPassed;
+float trigLevel;          // The current trigger level.
+float triggerTime;
 
 // Get scaled values for bounds
 int high;
@@ -110,6 +114,10 @@ float vlow = -15;
 
 void setup()
 {
+  foundTrigger = false;
+  triggeredPassed = 0;
+  triggerTime = 0;
+
   frameRate(1000);
   
   // sin wave
@@ -120,7 +128,8 @@ void setup()
   size(1200, 700, P2D);
   f = createFont("Arial", 16, true); 
 
-  //port = new Serial(this, Serial.list()[com_port], baud_rate);
+  printArray(Serial.list());
+  port = new Serial(this, Serial.list()[com_port], baud_rate);
   cp5 = new ControlP5(this);
 
   // Setup text labels.
@@ -150,10 +159,14 @@ void setup()
   timeBars[0] = boxMain/3;
   timeBars[1] = 2*boxMain/3;
   isTriggered = false;
+
   triggerLevel = height/4;
+
     // Get scaled values for bounds
   ohigh = high = getY(1023);
   olow = low  = getY(0);
+  valuesTriggered = new float[boxMain];
+
 }
 
 
@@ -174,18 +187,6 @@ public void Signal_Off(int theValue) {
 
 
 // Misc functions
-
-// Read value from serial stream
-/*int getValue() {
-  int value = -1;
-  while (port.available () >= 3) {
-    if (port.read() == 0xff) {
-      value = (port.read() << 8) | (port.read());
-    }
-  }
-  return value;
-}*/
-
 float getValue() {
   float value = -1;
   if (port.available() > 0) { 
@@ -226,10 +227,22 @@ void drawLines() {
   int x0 = 0, x1 = 0;
   float y0 = 0, y1 = 0;
   stroke(255,255,0);
+
   for (int i=0; i<boxMain; i++) {
     x1 = round(boxMain - ((boxMain-i) * zoom) + centerH);
-    //y1 = getY(values[i]);
-    y1 = (getYFloat(fvalues[i]));
+
+    // Check if it is in triggered mode.
+    if (isTriggered) {
+      // A trigger is found and the trigger point is currently at the middle of the screen.
+      if (foundTrigger && triggeredPassed-- <= 0)
+      {
+        arrayCopy(fvalues, valuesTriggered, boxMain);
+        foundTrigger = false;
+      }
+        y1 = getYFloat(valuesTriggered[i]);
+    } else {
+      y1 = getYFloat(fvalues[i]);
+    }
 
     if(i > 1 && y1 <= olow && y1 >= ohigh && y0 <= olow && y0 >= ohigh)
       line(x0, y0, x1, y1);
@@ -312,12 +325,6 @@ void pushValue(float value) {
   fvalues[boxMain-1] = value;
 }
 
-// Push the timestamps in the time array
-void pushTime(long time) {
-  for (int i=0; i<boxMain-1; i++)
-    times[i] = times[i+1];
-  times[boxMain-1] = time;
-}
 
 // Truncate a floating point number
 float truncate(float x, int digits) {
@@ -357,8 +364,12 @@ void keyPressed() {
     if (isTriggered) {
       println("Turn off trigger");
       isTriggered = false;
+      break;
     } else
-      trigger();
+      isTriggered = true;
+      println("Turn on trigger");
+      trigLevel = getVoltage(triggerLevel);
+      println("trigLevel = " + trigLevel);
     break;
   }
 
@@ -414,51 +425,6 @@ void mousePressed() {
     timeBars[1] = mouseX;
 }
 
-void draw()
-{
-  for(int i=0; i<60; i++) {
-  // start = millis();
-  // println("fps: "+int(frameRate));
-  background(0);  // Blackground.
-
-  // PROGRAM LOGIC
-
-  // Draw main gui lines (horizontal voltage lines, vertical line seperator, etc).
-  
-  drawGrid();
-  stroke(126);
-
-  // Get current voltage, time of reading
-  // val = getValue();
-  calcWave();
-  //println(yvalue);
-  val = yvalue;
-  
-
-  valTime = System.nanoTime();    // Get current time in nanoseconds.
-  
-  // If not paused and there is data in serial.
-  if (!pause && val != -1) {
-    // Push value/time onto array
-   // print(val+"\n");
-    pushValue(val);
-    pushTime(valTime);
-    
-    // Print current voltage reading
-    textFont(f, 16);
-    fill(204, 102, 0);
-    voltage = truncate(5.0*val / 1023, 1);
-    text("Voltage: " + voltage + "V", 1170, 30);
-  }
-
-  drawLines();     // Draw the voltage waveforms.
-  drawVertLines(); // Vertical line measurements.
-  //  end = millis();
-  //  println("Elapsed time = " + (end-start));
-  }
-
-}
-
 void calcWave() {
   // Increment theta (try different values for 'angular velocity' here
   theta += 0.02;
@@ -471,6 +437,66 @@ void calcWave() {
   //}
 }
 
+void draw()
+{
+  for(int i=0; i<60; i++) {
+    background(0);  // Blackground.
+
+    // Get current voltage, time of reading
+    val = getValue();
+  //  calcWave();
+    //val = yvalue;
+  
+    // If not paused and there is data in serial.
+    if (!pause && val != -1) {
+     // print(val+"\n");
+      pushValue(val);
+      
+      // Print current voltage reading
+      textFont(f, 16);
+      fill(204, 102, 0);
+      voltage = truncate(5.0*val / 1023, 1);
+      text("Voltage: " + voltage + "V", 1170, 30);
+    }
+  
+    if (isTriggered) {
+       trigger(); 
+    }
+
+    // Draw main gui lines (horizontal voltage lines, vertical line seperator, etc).    
+    drawGrid();
+    drawLines();     // Draw the voltage waveforms.
+    drawVertLines(); // Vertical line measurements.
+  }
+
+}
+
+
+
+void trigger()
+{
+  // Looking for a trigger..
+  if (!foundTrigger) {
+    //println("Looking for a trigger..");
+    //println("trigLevel = " + trigLevel);
+    // Found the newest point is on trigger level.
+    if ((fvalues[boxMain-1] > trigLevel-0.1) && fvalues[boxMain-1] < trigLevel+0.1) {
+      //println("Found trigger point");
+      // Rising edge trigger.
+      if (fvalues[boxMain-1] > fvalues[boxMain-2]) {
+        println("Found the trigger!");
+        foundTrigger = true;
+        // Show waveform when the trigger point reaches the middle of the screen.
+        triggeredPassed = boxMain/2;
+        triggerTime = System.nanoTime();
+        
+      }
+    }
+    
+  }
+}
+
+/*
 void trigger()
 {
   println("Turn on trigger");
@@ -543,5 +569,5 @@ void trigger()
      println("Did not find at least 2 trigger points."); 
   }
   
-}
+}*/
  

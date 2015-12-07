@@ -37,7 +37,7 @@ import controlP5.*;
 int xspacing = 16;           // How far apart should each horizontal location be spaced
 int w;                       // Width of entire wave
 float theta = 0.0;           // Start angle at 0
-float amplitude = 15;        // Height of wave
+float amplitude = 15;  // Height of wave
 float period = 500.0;        // How many pixels before the wave repeats
 float dx;                    // Value for incrementing X, a function of period and xspacing
 float[] yvalues;             // Using an array to store height values for the wave
@@ -57,7 +57,7 @@ final char MGL_UP     = 'r'; // Minor grid lines increase
 final char MGL_DOWN   = 'f'; //                  decrease
 final char TOG_PAUSE  = 'p'; // Toggle pause (unpause resets waveform)
 final char RESET_AXIS = ' '; // Reset axis settings
-final char MEAS_TIME  = 'x'; //  Adds and/or highlights vertical bars (time measurement)
+final char MEAS_TIME  = 'x'; // Adds and/or highlights vertical bars (time measurement)
 final char BAR_LEFT   = ','; // Move highlighted vertical bar left (can also mouse click)
 final char BAR_RIGHT  = '.'; //                               right
 final char TRIGGER    = 't'; // Trigger
@@ -69,48 +69,49 @@ float scale   = 1.0;
 int centerV   = 0;
 int centerH   = 0;
 int gridLines = 0;
-int com_port  = 0;         // Index number in Serial.list
+int com_port  = 1;   // Index number in Serial.list
 int baud_rate = 115200;
-int pHigh;                 // pixel location of the upper voltage bar (15V)
-int pLow;                  // pixel location of the lower voltage bar (-15V)
-float vhigh = 15;          // Starting upper voltage level.
-float vlow = -15;          // Starting lower voltage level.
 // * ----------------------------------------------
 
 // Text labels.
 Textlabel myTextlabelA;
-
+Textarea myTextArea;
 // GUI Box.
 int boxWidth = 2000;
 int boxLength = 1200;
 int boxMain  = boxWidth-int(boxWidth*0.2);
 
+
 // Global Variables.
 ControlP5 cp5;             // GUI lib.
-Textarea myTextArea;
 Serial port;               // Create object from Serial class.
-PFont f;
 
-String rcvBuf;             // Buffer to hold messages received from the serial port.
-float data;                // Holds the data from the serial port.
+String rcvBuf;             // Buffer to hold messages sent from microcontroller.
 int[] timeBars = {0,0};    // The horizontal line boundaries.
 long[] times;              // Holds the the current times.
+//int[] values;            // For the int original.
 float[] fvalues;           // Holds the voltage readings. 
-int   timeMode = 0;        // 0 = off, 1 = first veritcal bar, 2 = second veritcal bar.
+int   timeMode = 0;
+PFont f;
 boolean pause;             // To pause the screen.
-//float voltage;
-
-// * --------------- TRIGGERING ---------------
+float val;                        // Data received from the serial port
+float voltage;
+long start, end;
 boolean isTriggered;      // Is trigger mode on or off.
 boolean foundTrigger;     // Have we found a trigger point yet?
-float triggerLevel;       // Current trigger level.
-float[] valuesTriggered;  // Holds the buffer to print.
-int triggeredPassed;      // Sets where the trigger will be. (Default half the screen)
+float triggerLevel;
+float[] valuesTriggered;  // holds the buffer to print.
+int triggeredPassed;
 float trigLevel;          // The current trigger level.
-float triggerTime;        // The time at which the trigger is found.
-float triggerFrequency;
-// * ----------------------------------------------
+float triggerTime;
 
+// Get scaled values for bounds
+int high;
+int low;
+int ohigh;
+int olow;
+float vhigh = 15;
+float vlow = -15;
 
 void setup()
 {
@@ -149,77 +150,88 @@ void setup()
                   .setColorBackground(color(0,0))
                   .setColorForeground(color(0,0));
                   ;
-                  
- /*
- // * ------------------ HOT KEYS ------------------
-final char T_UP       = 'w'; // Translate waveform up
-final char T_DOWN     = 's'; //                    down
-final char T_LEFT     = 'a'; //                    left
-final char T_RIGHT    = 'd'; //                    right
-final char Z_IN       = 'c'; // Horizontal zoom in
-final char Z_OUT      = 'z'; //                 out
-final char S_IN       = 'e'; // Vertical scale in
-final char S_OUT      = 'q'; //                out
-final char MGL_UP     = 'r'; // Minor grid lines increase
-final char MGL_DOWN   = 'f'; //                  decrease
-final char TOG_PAUSE  = 'p'; // Toggle pause (unpause resets waveform)
-final char RESET_AXIS = ' '; // Reset axis settings
-final char MEAS_TIME  = 'x'; //  Adds and/or highlights vertical bars (time measurement)
-final char BAR_LEFT   = ','; // Move highlighted vertical bar left (can also mouse click)
-final char BAR_RIGHT  = '.'; //                               right
-final char TRIGGER    = 't'; // Trigger
-*/
-  myTextArea.setText("               HOTKEYS\n\n      Waveform translation\n                 w - up\n                 d - down\n                 a- left\n                 d - right"
-                   + "\n\n        Horizontal zoom\n                   c - in\n                   z - out"
-                   + "\n\n            Vertical scale\n                  e - in\n                  q - out"
-                   + "\n\n               Gridlines\n                r - add\n                f - remove"
-                   + "\n\n                TRIGGER\n         t - Toggle ON/OFF"
-                    );
   
+  myTextArea.setText("               HOTKEYS\n\n      Waveform translation\n                 w - up\n                 d - down\n                 a- left\n                 d - right"
+                 + "\n\n        Horizontal zoom\n                   c - in\n                   z - out"
+                 + "\n\n            Vertical scale\n                  e - in\n                  q - out"
+                 + "\n\n               Gridlines\n                r - add\n                f - remove"
+                 + "\n\n                TRIGGER\n         t - Toggle ON/OFF"
+                  );
+  
+                  
+  printArray(Serial.list());
+  //port = new Serial(this, Serial.list()[com_port], baud_rate);
+  cp5 = new ControlP5(this);
+
+
+
   times = new long[boxMain];
+  // values = new int[boxMain];
   fvalues = new float[boxMain];
   timeBars[0] = boxMain/3;
   timeBars[1] = 2*boxMain/3;
   isTriggered = false;
-  triggerLevel = height/3;
 
-  // Get scaled values for bounds
-  pHigh = getY(1023);
-  pLow  = getY(0);
+  triggerLevel = height/4;
+
+    // Get scaled values for bounds
+  ohigh = high = getY(1023);
+  olow = low  = getY(0);
   valuesTriggered = new float[boxMain];
 
 }
 
 
-// * ------------------ MISC FUNCTIONS ------------------
-// Returns a value read from the serial port until a '\n' character is received. Returns -1 if '\n' not found.
+// BUTTON LOGIC
+
+// This function captures any button actions.
+public void controlEvent(ControlEvent theEvent) {
+  println(theEvent.getController().getName());
+}
+
+public void ch1(int theValue) {
+  println("a button event from ch1: "+theValue);
+}
+
+public void Signal_Off(int theValue) {
+  println("a button event from Signal_Off: "+theValue);
+}
+
+
+// Misc functions
 float getValue() {
   float value = -1;
-  // Check if data is available in the port.
   if (port.available() > 0) { 
+    //  until we get a linefeed
       rcvBuf = port.readStringUntil('\n'); 
-    if (rcvBuf != null) {
-      // A newline was found.
+    // Convert the byte array to a String
+    if (rcvBuf != null)
       value = float(rcvBuf);
-    }
   }
+
   return value;
 }
 
-// Returns a pixel value given a voltage value. (does not change with scale)
+// Get a y-value for the datapoint, varies based on axis settings
 int getY(int val) {
   return (int)(height/2 -(val-512)*0.8 / 1023.0f * (height - 1));
 }
 
-// Returns a pixel value given a voltage value.
+// Get a y-value for the datapoint, varies based on axis settings
+/*float getYFloat(float val) {
+  return (float)(height/2 -(val+centerV)*scale / 1023.0f * (height - 1));
+}*/
+
 float getYFloat(float val) {
-  return (float)(height/2 - ((pLow-pHigh)/(2*vhigh))*val*scale);
+  return (float)(height/2 - ((low-high)/(2*vhigh))*val*scale);
 }
 
-// Returns a voltage value given a pixel value.
 float getVoltage(float val) {
-  float half = (pLow-pHigh)/2;
+  float half = (low-high)/2;
+  
   return (((height/2)- val)*(vhigh/half));
+  
+ // return (float)(height/2 - ((low-high)/(2*15))*val*scale);
 }
 
 // Draw voltage waveforms.
@@ -234,7 +246,7 @@ void drawLines() {
     // Check if it is in triggered mode.
     if (isTriggered) {
       // A trigger is found and the trigger point is currently at the middle of the screen.
-      if (foundTrigger && triggeredPassed == 0)
+      if (foundTrigger && triggeredPassed-- <= 0)
       {
         arrayCopy(fvalues, valuesTriggered, boxMain);
         foundTrigger = false;
@@ -244,27 +256,26 @@ void drawLines() {
       y1 = getYFloat(fvalues[i]);
     }
 
-    // Only display waveform in bounds of the 'screen'.
-    if(i > 1 && y1 <= pLow && y1 >= pHigh && y0 <= pLow && y0 >= pHigh)
+    if(i > 1 && y1 <= olow && y1 >= ohigh && y0 <= olow && y0 >= ohigh)
       line(x0, y0, x1, y1);
     x0 = x1;
     y0 = y1;
   }
 }
 
-// Draw gridlines (bounds, minor).
+// Draw gridlines (bounds, minor)
 void drawGrid() {
   // Draw voltage bounds
   stroke(255, 0, 0);
-  line(0, pHigh, boxMain, pHigh);
-  line(0, pLow, boxMain, pLow);
+  line(0, high, boxMain, high);
+  line(0, low, boxMain, low);
 
   // Add voltage bound text
   textFont(f, 20);
   fill(255, 0, 0);
   
-  text(truncate(vhigh,1)+"V", 5, pHigh-2);
-  text(truncate(vlow,1)+"V", 5, pLow+18);
+  text(truncate(vhigh,1)+"V", 5, high-2);
+  text(truncate(vlow,1)+"V", 5, low+18);
 
   // Draw minor grid lines
   int gridVal = 0;
@@ -301,17 +312,9 @@ void drawGrid() {
 
   // Line divisor b/w signal and buttons.
   line(boxMain, 0, boxMain, boxLength);
-  
-  // Print frequency in triggered mode.
-  if (isTriggered) {
-    textFont(f, 16);
-    fill(204, 102, 0);
-    triggerFrequency = 1/((System.nanoTime() - triggerTime)/1000000000);
-    text("Frequency: " + triggerFrequency + "Hz", boxMain/2, height*0.95);
-  }
 }
 
-// Draw vertical 'time bars' (seperate from above for better layering).
+// Draw vertical 'time bars' (seperate from above for better layering)
 void drawVertLines(){
   stroke(75, 75, 75);
   if (timeMode == 1) {
@@ -326,53 +329,23 @@ void drawVertLines(){
   }
 }
 
-// Push a voltage value into the data array.
-void pushValue(float value) {
-  for (int i=0; i<boxMain-1; i++) {
-    fvalues[i] = fvalues[i+1];
-  }
-  fvalues[boxMain-1] = value;
 
-  if (triggeredPassed > 0)
-    triggeredPassed--;
+// Push the values in the data array
+void pushValue(float value) {
+  for (int i=0; i<boxMain-1; i++)
+    fvalues[i] = fvalues[i+1];
+  fvalues[boxMain-1] = value;
 }
 
-// Truncate a floating point number.
+
+// Truncate a floating point number
 float truncate(float x, int digits) {
   float temp = pow(10.0, digits);
   return round( x * temp ) / temp;
 }
 
-// Generates a sin wave.
-void calcWave() {
-  // Increment theta (try different values for 'angular velocity' here
-  theta += 0.02;
 
-  // For every x value, calculate a y value with sine function
-  float x = theta;
-  //for (int i = 0; i < yvalues.length; i++) {
-    yvalue = sin(x)*amplitude + 0;
-    x+=dx;
-  //}
-}
-
-void trigger()
-{
-  // Only look for a trigger if a trigger has not been found yet.
-  if (!foundTrigger) {
-    // Look for a rising edge trigger.
-    if (fvalues[boxMain-1] > trigLevel && fvalues[boxMain-2] < trigLevel)
-    {
-      // println("Found the trigger!");
-      foundTrigger = true;
-      triggeredPassed = boxMain/2;      // Show waveform when the trigger point reaches the middle of the screen.
-      triggerTime = System.nanoTime();  // Store the current time to measure the frequency of the signal.
-    }
-  }
-}
-// * ----------------------------------------------
-
-// When a key is pressed down or held.
+// When a key is pressed down or held...
 void keyPressed() {
   switch (key) {
   case T_UP: centerV += 10/scale; break;                     // Move waveform up
@@ -410,33 +383,35 @@ void keyPressed() {
       trigLevel = getVoltage(triggerLevel);
       println("trigLevel = " + trigLevel);
     break;
-  }  
+  }
+
+  
 }
 
-// When a key is released.
+// When a key is released...
 void keyReleased() {
   println(key+": "+(int)key);
   switch (key) {
-  case Z_IN:                                                 // Zoom horizontal in
+  case Z_IN:                                                 // Zoom horizontal
     zoom *= 2.0f;
     if ( (int) (boxMain / zoom) <= 1 )
       zoom /= 2.0f;
     break;
-  case Z_OUT:                                                // Zoom horizontal out
+  case Z_OUT:                                                // Zoom horizontal
     zoom /= 2.0f;
     if (zoom < 1.0f)
       zoom *= 2.0f;
     break;
-  case S_IN:                                                 // Scale vertical in
-    scale*=2;
+  case S_IN:
+    scale*=2; 
     vhigh/=2;
     vlow/=2;
-    break;                                                  
-  case S_OUT:                                                // Scale vertical out
+    break;                                // Scale vertical
+  case S_OUT:
     scale /= 2; 
     vhigh*=2;
     vlow*=2;
-  break;                             
+  break;                             // Scale vertical
   case RESET_AXIS:                                           // Reset all scaling
     centerV = 0; centerH = 0;
     scale = 1.0; zoom  = 1; gridLines = 0;
@@ -462,38 +437,76 @@ void mousePressed() {
     timeBars[1] = mouseX;
 }
 
+void calcWave() {
+  // Increment theta (try different values for 'angular velocity' here
+  theta += 0.02;
+
+  // For every x value, calculate a y value with sine function
+  float x = theta;
+  //for (int i = 0; i < yvalues.length; i++) {
+    yvalue = sin(x)*amplitude + 0;
+    x+=dx;
+  //}
+}
+
 void draw()
 {
-  for(int i=0; i<600; i++) {
+  for(int i=0; i<60; i++) {
     background(0);  // Blackground.
 
     // Get current voltage, time of reading
-    //data = getValue();
+    //val = getValue();
     calcWave();
-    data = yvalue;
+    val = yvalue;
   
-    // Update the current data buffer if it is not paused and there is data in the serial.
-    if (!pause && data != -1) {
-      // print(data+"\n");
-      pushValue(data);
+    // If not paused and there is data in serial.
+    if (!pause && val != -1) {
+     // print(val+"\n");
+      pushValue(val);
       
       // Print current voltage reading
-      /*
       textFont(f, 16);
       fill(204, 102, 0);
-      voltage = truncate(5.0*data / 1023, 1);
+      voltage = truncate(5.0*val / 1023, 1);
       text("Voltage: " + voltage + "V", 1170, 30);
-      */
     }
-
-    // Only trigger in trigger mode.
+  
     if (isTriggered) {
        trigger(); 
     }
 
-    drawGrid();      // Draw main gui lines (horizontal voltage lines, vertical line seperator, etc).    
+    // Draw main gui lines (horizontal voltage lines, vertical line seperator, etc).    
+    drawGrid();
     drawLines();     // Draw the voltage waveforms.
     drawVertLines(); // Vertical line measurements.
   }
 
+}
+
+
+
+void trigger()
+{
+  // Looking for a trigger..
+  if (!foundTrigger) {
+    //println("Looking for a trigger..");
+    //println("trigLevel = " + trigLevel);
+    // Found the newest point is on trigger level.
+    if (fvalues[boxMain-1] > trigLevel && fvalues[boxMain-2] < trigLevel) {      //println("Found trigger point");
+      // Rising edge trigger.
+      if (fvalues[boxMain-1] > fvalues[boxMain-2]) {
+        println("Found the trigger!");
+        foundTrigger = true;
+        // Show waveform when the trigger point reaches the middle of the screen.
+        triggeredPassed = boxMain/2;
+        triggerTime = System.nanoTime();
+        
+      }
+    }
+    
+  }
+}
+void trigger()
+{
+  
 }

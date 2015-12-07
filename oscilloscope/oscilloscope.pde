@@ -68,7 +68,7 @@ float zoom    = 1.0;
 float scale   = 1.0;
 int centerV   = 0;
 int centerH   = 0;
-int gridLines = 0;
+int gridLines = 1;
 int com_port  = 1;   // Index number in Serial.list
 int baud_rate = 115200;
 // * ----------------------------------------------
@@ -117,6 +117,7 @@ float vhigh = 15;
 float vlow = -15;
 int ad;
 int as;
+float jj, kk;
 
 void setup()
 {
@@ -163,6 +164,7 @@ void setup()
                  + "\n\n            Vertical scale\n                  e - in\n                  q - out"
                  + "\n\n               Gridlines\n                r - add\n                f - remove"
                  + "\n\n                TRIGGER\n         t - Toggle ON/OFF"
+                 + "\n\n                   RESET\n                 Space bar"
                   );
   
                   
@@ -185,7 +187,9 @@ void setup()
   ohigh = high = getY(1023);
   olow = low  = getY(0);
   valuesTriggered = new float[boxMain];
-
+  
+  jj =  (boxMain/scale/2);
+  kk =  (boxMain/2 + jj);
 }
 
 
@@ -230,7 +234,7 @@ int getY(int val) {
 }*/
 
 float getYFloat(float val) {
-  return (float)(height/2 - ((low-high)/(2*vhigh))*val*scale);
+  return (float)(height/2 - ((low-high)/(2*vhigh))*(val+centerV)*scale);
 }
 
 float getVoltage(float val) {
@@ -247,11 +251,13 @@ void drawLines() {
   float y0 = 0, y1 = 0;
   stroke(255,255,0);
 
+
   for (int i=0; i<boxMain; i++) {
-    x1 = round(boxMain - ((boxMain-i) * zoom) + centerH);
+
 
     // Check if it is in triggered mode.
     if (isTriggered) {
+      x1 = round(boxMain - ((boxMain-i) * zoom) + centerH);
       // A trigger is found and the trigger point is currently at the middle of the screen.
       if (foundTrigger && triggeredPassed <= 0)
       {
@@ -260,6 +266,7 @@ void drawLines() {
       }
         y1 = getYFloat(valuesTriggered[i]);
     } else {
+      x1 = round(boxMain - ((boxMain-i) * zoom) + centerH);
       y1 = getYFloat(fvalues[i]);
     }
 
@@ -278,11 +285,11 @@ void drawGrid() {
   line(0, low, boxMain, low);
 
   // Add voltage bound text
-  textFont(f, 20);
+  textFont(f, 40);
   fill(255, 0, 0);
   
   text(truncate(vhigh,1)+"V", 5, high-2);
-  text(truncate(vlow,1)+"V", 5, low+18);
+  text(truncate(vlow,1)+"V", 5, low+35);
 
   // Draw minor grid lines
   int gridVal = 0;
@@ -370,18 +377,18 @@ float truncate(float x, int digits) {
 void keyPressed() {
   switch (key) {
   case T_UP:                      // Move waveform up
-    if (isTriggered) {
+  /*  if (isTriggered) {
       as -= 25;
-    } else {
-      centerV += 10/scale;
-    }
+    } else {*/
+      centerV += 1/scale;
+  //  }
     break;
   case T_DOWN:                    // Move waveform down
-    if (isTriggered) {
+   /* if (isTriggered) {
       as += 25;
-    } else {
-      centerV -= 10/scale;
-    }
+    } else {*/
+      centerV -= 1/scale;
+  //  }
     break;
   case T_RIGHT:                   // Move waveform right
     if (isTriggered) {
@@ -460,7 +467,7 @@ void keyReleased() {
   break;                             // Scale vertical
   case RESET_AXIS:                                           // Reset all scaling
     centerV = 0; centerH = 0;
-    scale = 1.0; zoom  = 1; gridLines = 0;
+    scale = 1.0; zoom  = 1; gridLines = 1;
     break;
   case MEAS_TIME: timeMode = (timeMode + 1) % 3; break;      // Change the vertical bars (off, left bar, right bar)
   case TOG_PAUSE:                                            // Toggle waveform pausing

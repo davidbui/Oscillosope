@@ -61,6 +61,8 @@ final char MEAS_TIME  = 'x'; // Adds and/or highlights vertical bars (time measu
 final char BAR_LEFT   = ','; // Move highlighted vertical bar left (can also mouse click)
 final char BAR_RIGHT  = '.'; //                               right
 final char TRIGGER    = 't'; // Trigger
+final char TRIGGER_UP       = 'y'; // Translate waveform up
+final char TRIGGER_DOWN     = 'h'; //                    down
 // * ----------------------------------------------
 
 // * --------------- STARTING STATE ---------------
@@ -69,7 +71,7 @@ float scale   = 1.0;
 int centerV   = 0;
 int centerH   = 0;
 int gridLines = 1;
-int com_port  = 1;   // Index number in Serial.list
+int com_port  = 0;   // Index number in Serial.list
 int baud_rate = 115200;
 // * ----------------------------------------------
 
@@ -89,6 +91,7 @@ Serial port;               // Create object from Serial class.
 String rcvBuf;             // Buffer to hold messages sent from microcontroller.
 int[] timeBars = {0,0};    // The horizontal line boundaries.
 long[] times;              // Holds the the current times.
+long timez;
 //int[] values;            // For the int original.
 float[] fvalues;           // Holds the voltage readings. 
 int   timeMode = 0;
@@ -106,7 +109,7 @@ float trigLevel;          // The current trigger level.
 float triggerTime;
 float triggerFrequency;
 float newTriggerFrequency;
-int x = 100;
+int xx = 100;
 float temptrigger;
 // Get scaled values for bounds
 int high;
@@ -118,15 +121,21 @@ float vlow = -15;
 int ad;
 int as;
 float jj, kk;
+int x;
+float oldtime;
+int yy;
 
 void setup()
 {
+  timez = 0;
   ad = as = 0;
   temptrigger = 0;
   foundTrigger = false;
   triggeredPassed = 0;
   triggerTime = 0;
-
+  xx = 0;
+  oldtime = 0;
+  yy = 0;
   frameRate(1000);
   
   // sin wave
@@ -138,7 +147,7 @@ void setup()
   f = createFont("Arial", 16, true); 
 
   printArray(Serial.list());
- // port = new Serial(this, Serial.list()[com_port], baud_rate);
+  port = new Serial(this, Serial.list()[com_port], baud_rate);
   cp5 = new ControlP5(this);
 
   // Setup text labels.
@@ -167,7 +176,6 @@ void setup()
                  + "\n\n                   RESET\n                 Space bar"
                   );
   
-                  
   printArray(Serial.list());
   //port = new Serial(this, Serial.list()[com_port], baud_rate);
   cp5 = new ControlP5(this);
@@ -320,7 +328,12 @@ void drawGrid() {
       text("Time: N/A", 30, height-12);
     else{
       float timeDiff = truncate((times[idx1] - times[idx0])/2000000.0,2);
-      text("Time: " + timeDiff + "ms", 30, height-12);
+      
+      if (xx-- <= 0) {
+        oldtime = timeDiff*2;
+        xx = 400;
+      }
+      text("Time: " + oldtime + "ms", 30, height-12);
     }
   }
 
@@ -332,9 +345,9 @@ void drawGrid() {
     textFont(f, 16);
     fill(204, 102, 0);
     triggerFrequency = truncate(1/((System.nanoTime() - triggerTime)/1000000000),1);
-    if(x-- == 0) {
+    if(yy-- == 0) {
       newTriggerFrequency = triggerFrequency;
-      x = 200;
+      yy = 400;
     }
     text("Frequency: " + newTriggerFrequency + "Hz", boxMain/2+50, height*0.95);
     line(boxMain-temptrigger, 0, boxMain-temptrigger, height);
@@ -365,6 +378,12 @@ void pushValue(float value) {
   triggeredPassed--;
 }
 
+// Push the timestamps in the time array
+void pushTime(long time) {
+  for (int i=0; i<boxMain-1; i++)
+    times[i] = times[i+1];
+  times[boxMain-1] = time;
+}
 
 // Truncate a floating point number
 float truncate(float x, int digits) {
@@ -435,6 +454,18 @@ void keyPressed() {
       println("Turn on trigger");
       trigLevel = getVoltage(triggerLevel+as);
       println("trigLevel = " + trigLevel);
+    break;
+  case TRIGGER_UP:
+    if (isTriggered){
+      as += 25;
+      println("Trigger level = " + trigLevel);
+    }
+    break;
+  case TRIGGER_DOWN:
+    if (isTriggered) {
+      as -= 25;
+      println("Trigger level = " + trigLevel);
+    }
     break;
   }
 
@@ -508,13 +539,15 @@ void draw()
     background(0);  // Blackground.
 
     // Get current voltage, time of reading
-    //val = getValue();
-    calcWave();
-    val = yvalue;
+    val = getValue();
+    //calcWave();
+    //val = yvalue;
   
     // If not paused and there is data in serial.
     if (!pause && val != -1) {
      // print(val+"\n");
+      timez = System.nanoTime();
+      pushTime(timez);
       pushValue(val);
       
     }
@@ -541,16 +574,16 @@ void trigger()
     if (fvalues[boxMain-1] > (trigLevel*scale) && fvalues[boxMain-2] < (trigLevel*scale)) {      //println("Found trigger point");
       // Rising edge trigger.
       if (fvalues[boxMain-1] > fvalues[boxMain-2]) {
-        println("Found the trigger!");
+        //println("Found the trigger!");
         foundTrigger = true;
 
         // Show waveform when the trigger point reaches the middle of the screen.
         triggeredPassed = boxMain/2 +ad;
         temptrigger = triggeredPassed;
         triggerTime = System.nanoTime();
-        
       }
     }
-    
+  } else if (fvalues[boxMain-1] > (trigLevel*scale) && fvalues[boxMain-2] < (trigLevel*scale)) {
+    triggerTime = System.nanoTime();
   }
 }

@@ -63,6 +63,7 @@ final char BAR_RIGHT  = '.'; //                               right
 final char TRIGGER    = 't'; // Trigger
 final char TRIGGER_UP       = 'y'; // Translate waveform up
 final char TRIGGER_DOWN     = 'h'; //                    down
+final char TRIGGER_OFF     = 'u'; //                    down
 // * ----------------------------------------------
 
 // * --------------- STARTING STATE ---------------
@@ -104,6 +105,8 @@ boolean isTriggered;      // Is trigger mode on or off.
 boolean foundTrigger;     // Have we found a trigger point yet?
 float triggerLevel;
 float[] valuesTriggered;  // holds the buffer to print.
+float[] empty;  // holds the buffer to print.
+boolean notfoundb;
 int triggeredPassed;
 float trigLevel;          // The current trigger level.
 float triggerTime;
@@ -124,9 +127,15 @@ float jj, kk;
 int x;
 float oldtime;
 int yy;
-
+int notfound;
+float pk2pk;
+float oldpk2pk;
+boolean trigLineOn;
 void setup()
 {
+  trigLineOn = true;
+  notfoundb = true;
+  notfound = 0;
   timez = 0;
   ad = as = 0;
   temptrigger = 0;
@@ -172,7 +181,7 @@ void setup()
                  + "\n\n        Horizontal zoom\n                   c - in\n                   z - out"
                  + "\n\n            Vertical scale\n                  e - in\n                  q - out"
                  + "\n\n               Gridlines\n                r - add\n                f - remove"
-                 + "\n\n                TRIGGER\n         t - Toggle ON/OFF"
+                 + "\n\n                TRIGGER\n              t - ON/OFF\n                   y - up\n                   h - down\n            u - Trig Line ON/OFF\n"       
                  + "\n\n                   RESET\n                 Space bar"
                   );
   
@@ -189,13 +198,13 @@ void setup()
   timeBars[1] = 2*boxMain/3;
   isTriggered = false;
 
-  triggerLevel = height/4;
+  triggerLevel = height/2;
 
     // Get scaled values for bounds
   ohigh = high = getY(1023);
   olow = low  = getY(0);
   valuesTriggered = new float[boxMain];
-  
+  empty = new float[boxMain];
   jj =  (boxMain/scale/2);
   kk =  (boxMain/2 + jj);
 }
@@ -271,8 +280,13 @@ void drawLines() {
       {
         arrayCopy(fvalues, valuesTriggered, boxMain);
         foundTrigger = false;
-      }
+      } 
+      
+      if (notfoundb) {
+        y1 = getYFloat(empty[i]);
+      } else {
         y1 = getYFloat(valuesTriggered[i]);
+      }
     } else {
       x1 = round(boxMain - ((boxMain-i) * zoom) + centerH);
       y1 = getYFloat(fvalues[i]);
@@ -342,15 +356,24 @@ void drawGrid() {
   
   // Print frequency in triggered mode.
   if (isTriggered) {
+    findPK2PK(valuesTriggered);
     textFont(f, 16);
     fill(204, 102, 0);
     triggerFrequency = truncate(1/((System.nanoTime() - triggerTime)/1000000000),1);
     if(yy-- == 0) {
       newTriggerFrequency = triggerFrequency;
+      pk2pk = oldpk2pk;
       yy = 400;
     }
+    stroke(20, 75, 200);
     text("Frequency: " + newTriggerFrequency + "Hz", boxMain/2+50, height*0.95);
-    line(boxMain-temptrigger, 0, boxMain-temptrigger, height);
+    text("PK to PK: " + pk2pk + "V", boxMain/2+50, height*0.95+30);
+    
+    stroke(175, 100, 220);
+    if (trigLineOn) {
+      line(boxMain-temptrigger, 0, boxMain-temptrigger, height);
+      line(0, getYFloat(trigLevel), boxMain, getYFloat(trigLevel));
+    }
   }
 }
 
@@ -457,15 +480,23 @@ void keyPressed() {
     break;
   case TRIGGER_UP:
     if (isTriggered){
-      as += 25;
-      println("Trigger level = " + trigLevel);
+      as -= 25;
+      trigLevel = getVoltage(triggerLevel+as);
+      println("trigLevel = " + trigLevel);
     }
     break;
   case TRIGGER_DOWN:
     if (isTriggered) {
-      as -= 25;
-      println("Trigger level = " + trigLevel);
+      as += 25;
+      trigLevel = getVoltage(triggerLevel+as);
+      println("trigLevel = " + trigLevel);
     }
+    break;
+  case TRIGGER_OFF:
+    if(trigLineOn)
+      trigLineOn = false;
+    else 
+      trigLineOn = true;
     break;
   }
 
@@ -581,9 +612,35 @@ void trigger()
         triggeredPassed = boxMain/2 +ad;
         temptrigger = triggeredPassed;
         triggerTime = System.nanoTime();
+        
+        notfoundb = false;
+        notfound = 0;
+
       }
+    }
+    
+    if (notfound++ >= boxMain*2) {
+      notfound = boxMain;
+      notfoundb = true;
     }
   } else if (fvalues[boxMain-1] > (trigLevel*scale) && fvalues[boxMain-2] < (trigLevel*scale)) {
     triggerTime = System.nanoTime();
   }
+}
+
+void findPK2PK(float array[])
+{
+  float smallest = array[0];
+  float largest = array[0];
+   
+  for(int i=1; i< array.length; i++)
+  {
+          if(array[i] > largest)
+                  largest = array[i];
+          else if (array[i] < smallest)
+                  smallest = array[i];
+         
+  }
+  
+  pk2pk = largest-smallest;
 }

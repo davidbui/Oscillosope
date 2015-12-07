@@ -81,9 +81,9 @@ float vlow = -15;          // Starting lower voltage level.
 Textlabel myTextlabelA;
 
 // GUI Box.
-int boxWidth = 1200;
-int boxLength = 700;
-int boxMain  = boxWidth-200;
+int boxWidth = 2000;
+int boxLength = 1200;
+int boxMain  = boxWidth-int(boxWidth*0.2);
 
 // Global Variables.
 ControlP5 cp5;             // GUI lib.
@@ -124,64 +124,35 @@ void setup()
   dx = (TWO_PI / period) * xspacing;
   yvalues = new float[w/xspacing];
   
-  size(1200, 700, P2D);
+  size(2000, 1200, P2D);
   f = createFont("Arial", 16, true); 
 
   printArray(Serial.list());
-  port = new Serial(this, Serial.list()[com_port], baud_rate);
+ // port = new Serial(this, Serial.list()[com_port], baud_rate);
   cp5 = new ControlP5(this);
 
   // Setup text labels.
   myTextlabelA = cp5.addTextlabel("label")
-                  .setText("Trigger")
-                  .setPosition(width-180,20)
+                  .setText("Osciloscope")
+                  .setPosition(((width-boxMain)/2)+boxMain,20)
                   .setColorValue(255)
                   .setFont(createFont("Georgia",15))
                   ;
   
-  // Setup buttons.
-  cp5.addButton("ch1")
-     .setValue(0)
-     .setPosition(boxWidth-180,40)
-     .setSize(30,19)
-     ;
-  
-  cp5.addButton("Signal_Off")
-     .setValue(1)
-     .setPosition(boxWidth-180,60)
-     .setSize(55,19)
-     ;
-
   times = new long[boxMain];
-  // values = new int[boxMain];
   fvalues = new float[boxMain];
   timeBars[0] = boxMain/3;
   timeBars[1] = 2*boxMain/3;
   isTriggered = false;
-
   triggerLevel = height/3;
 
-    // Get scaled values for bounds
+  // Get scaled values for bounds
   pHigh = getY(1023);
   pLow  = getY(0);
   valuesTriggered = new float[boxMain];
 
 }
 
-// * ------------------ BUTTON LOGIC ------------------
-// This function captures any button actions.
-public void controlEvent(ControlEvent theEvent) {
-  println(theEvent.getController().getName());
-}
-
-public void ch1(int theValue) {
-  println("a button event from ch1: "+theValue);
-}
-
-public void Signal_Off(int theValue) {
-  println("a button event from Signal_Off: "+theValue);
-}
-// * ----------------------------------------------
 
 // * ------------------ MISC FUNCTIONS ------------------
 // Returns a value read from the serial port until a '\n' character is received. Returns -1 if '\n' not found.

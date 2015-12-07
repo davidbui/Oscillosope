@@ -57,7 +57,7 @@ final char MGL_UP     = 'r'; // Minor grid lines increase
 final char MGL_DOWN   = 'f'; //                  decrease
 final char TOG_PAUSE  = 'p'; // Toggle pause (unpause resets waveform)
 final char RESET_AXIS = ' '; // Reset axis settings
-final char MEAS_TIME  = 'x'; // Adds and/or highlights vertical bars (time measurement)
+final char MEAS_TIME  = 'x'; //  Adds and/or highlights vertical bars (time measurement)
 final char BAR_LEFT   = ','; // Move highlighted vertical bar left (can also mouse click)
 final char BAR_RIGHT  = '.'; //                               right
 final char TRIGGER    = 't'; // Trigger
@@ -87,6 +87,7 @@ int boxMain  = boxWidth-int(boxWidth*0.2);
 
 // Global Variables.
 ControlP5 cp5;             // GUI lib.
+Textarea myTextArea;
 Serial port;               // Create object from Serial class.
 PFont f;
 
@@ -134,10 +135,46 @@ void setup()
   // Setup text labels.
   myTextlabelA = cp5.addTextlabel("label")
                   .setText("Osciloscope")
-                  .setPosition(((width-boxMain)/2)+boxMain,20)
+                  .setPosition(((width-boxMain)/2)-110+boxMain,20)
                   .setColorValue(255)
-                  .setFont(createFont("Georgia",15))
+                  .setFont(createFont("Georgia",40))
                   ;
+  
+  myTextArea = cp5.addTextarea("txt")
+                  .setPosition(boxMain+5,100)
+                  .setSize(width-boxMain,height)
+                  .setFont(createFont("arial",30))
+                  .setLineHeight(30)
+                  .setColor(color(255))
+                  .setColorBackground(color(0,0))
+                  .setColorForeground(color(0,0));
+                  ;
+                  
+ /*
+ // * ------------------ HOT KEYS ------------------
+final char T_UP       = 'w'; // Translate waveform up
+final char T_DOWN     = 's'; //                    down
+final char T_LEFT     = 'a'; //                    left
+final char T_RIGHT    = 'd'; //                    right
+final char Z_IN       = 'c'; // Horizontal zoom in
+final char Z_OUT      = 'z'; //                 out
+final char S_IN       = 'e'; // Vertical scale in
+final char S_OUT      = 'q'; //                out
+final char MGL_UP     = 'r'; // Minor grid lines increase
+final char MGL_DOWN   = 'f'; //                  decrease
+final char TOG_PAUSE  = 'p'; // Toggle pause (unpause resets waveform)
+final char RESET_AXIS = ' '; // Reset axis settings
+final char MEAS_TIME  = 'x'; //  Adds and/or highlights vertical bars (time measurement)
+final char BAR_LEFT   = ','; // Move highlighted vertical bar left (can also mouse click)
+final char BAR_RIGHT  = '.'; //                               right
+final char TRIGGER    = 't'; // Trigger
+*/
+  myTextArea.setText("               HOTKEYS\n\n      Waveform translation\n                 w - up\n                 d - down\n                 a- left\n                 d - right"
+                   + "\n\n        Horizontal zoom\n                   c - in\n                   z - out"
+                   + "\n\n            Vertical scale\n                  e - in\n                  q - out"
+                   + "\n\n               Gridlines\n                r - add\n                f - remove"
+                   + "\n\n                TRIGGER\n         t - Toggle ON/OFF"
+                    );
   
   times = new long[boxMain];
   fvalues = new float[boxMain];

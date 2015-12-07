@@ -104,7 +104,10 @@ float[] valuesTriggered;  // holds the buffer to print.
 int triggeredPassed;
 float trigLevel;          // The current trigger level.
 float triggerTime;
-
+float triggerFrequency;
+float newTriggerFrequency;
+int x = 100;
+float temptrigger;
 // Get scaled values for bounds
 int high;
 int low;
@@ -112,9 +115,13 @@ int ohigh;
 int olow;
 float vhigh = 15;
 float vlow = -15;
+int ad;
+int as;
 
 void setup()
 {
+  ad = as = 0;
+  temptrigger = 0;
   foundTrigger = false;
   triggeredPassed = 0;
   triggerTime = 0;
@@ -246,7 +253,7 @@ void drawLines() {
     // Check if it is in triggered mode.
     if (isTriggered) {
       // A trigger is found and the trigger point is currently at the middle of the screen.
-      if (foundTrigger && triggeredPassed-- <= 0)
+      if (foundTrigger && triggeredPassed <= 0)
       {
         arrayCopy(fvalues, valuesTriggered, boxMain);
         foundTrigger = false;
@@ -312,6 +319,19 @@ void drawGrid() {
 
   // Line divisor b/w signal and buttons.
   line(boxMain, 0, boxMain, boxLength);
+  
+  // Print frequency in triggered mode.
+  if (isTriggered) {
+    textFont(f, 16);
+    fill(204, 102, 0);
+    triggerFrequency = truncate(1/((System.nanoTime() - triggerTime)/1000000000),1);
+    if(x-- == 0) {
+      newTriggerFrequency = triggerFrequency;
+      x = 200;
+    }
+    text("Frequency: " + newTriggerFrequency + "Hz", boxMain/2+50, height*0.95);
+    line(boxMain-temptrigger, 0, boxMain-temptrigger, height);
+  }
 }
 
 // Draw vertical 'time bars' (seperate from above for better layering)
@@ -335,6 +355,7 @@ void pushValue(float value) {
   for (int i=0; i<boxMain-1; i++)
     fvalues[i] = fvalues[i+1];
   fvalues[boxMain-1] = value;
+  triggeredPassed--;
 }
 
 
@@ -348,10 +369,35 @@ float truncate(float x, int digits) {
 // When a key is pressed down or held...
 void keyPressed() {
   switch (key) {
-  case T_UP: centerV += 10/scale; break;                     // Move waveform up
-  case T_DOWN: centerV -= 10/scale; break;                   // Move waveform down
-  case T_RIGHT: centerH += 10/scale; break;                  // Move waveform right
-  case T_LEFT: centerH -= 10/scale; break;                   // Move waveform left
+  case T_UP:                      // Move waveform up
+    if (isTriggered) {
+      as -= 25;
+    } else {
+      centerV += 10/scale;
+    }
+    break;
+  case T_DOWN:                    // Move waveform down
+    if (isTriggered) {
+      as += 25;
+    } else {
+      centerV -= 10/scale;
+    }
+    break;
+  case T_RIGHT:                   // Move waveform right
+    if (isTriggered) {
+      ad -= 50;
+    } else {
+      centerH += 10/scale; 
+    }
+    
+    break;
+  case T_LEFT:                    // Move waveform left
+    if (isTriggered) {
+      ad += 50;
+    } else {
+      centerH -= 10/scale; 
+    }
+    break;
   case MGL_UP:                                               // Increase minor grid lines
     if (gridLines < 49)
       gridLines += 1;
@@ -380,7 +426,7 @@ void keyPressed() {
     } else
       isTriggered = true;
       println("Turn on trigger");
-      trigLevel = getVoltage(triggerLevel);
+      trigLevel = getVoltage(triggerLevel+as);
       println("trigLevel = " + trigLevel);
     break;
   }
@@ -464,11 +510,6 @@ void draw()
      // print(val+"\n");
       pushValue(val);
       
-      // Print current voltage reading
-      textFont(f, 16);
-      fill(204, 102, 0);
-      voltage = truncate(5.0*val / 1023, 1);
-      text("Voltage: " + voltage + "V", 1170, 30);
     }
   
     if (isTriggered) {
@@ -489,24 +530,20 @@ void trigger()
 {
   // Looking for a trigger..
   if (!foundTrigger) {
-    //println("Looking for a trigger..");
-    //println("trigLevel = " + trigLevel);
     // Found the newest point is on trigger level.
-    if (fvalues[boxMain-1] > trigLevel && fvalues[boxMain-2] < trigLevel) {      //println("Found trigger point");
+    if (fvalues[boxMain-1] > (trigLevel*scale) && fvalues[boxMain-2] < (trigLevel*scale)) {      //println("Found trigger point");
       // Rising edge trigger.
       if (fvalues[boxMain-1] > fvalues[boxMain-2]) {
         println("Found the trigger!");
         foundTrigger = true;
+
         // Show waveform when the trigger point reaches the middle of the screen.
-        triggeredPassed = boxMain/2;
+        triggeredPassed = boxMain/2 +ad;
+        temptrigger = triggeredPassed;
         triggerTime = System.nanoTime();
         
       }
     }
     
   }
-}
-void trigger()
-{
-  
 }
